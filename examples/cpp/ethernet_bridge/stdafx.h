@@ -10,31 +10,43 @@
 #include "targetver.h"
 
 #include <winsock2.h>
+#include <in6addr.h>
 #include <tchar.h>
 #include <ws2ipdef.h>
 #include <IPHlpApi.h>
+#include <Mstcpip.h>
 #include <conio.h>
+#include <WinDNS.h>
 
-#include <utility>
-#include <vector>
-#include <array>
-#include <unordered_map>
 #include <memory>
-#include <tuple>
 #include <iostream>
-#include <string>
+#include <iomanip>
+#include <chrono>
 #include <thread>
-#include <mutex>
+#include <limits>
 #include <atomic>
-#include <algorithm>
-#include <shared_mutex>
-#include <optional>
+#include <string>
+#include <functional>
+#include <vector>
+#include <cassert>
+#include <array>
 #include <map>
-#include <fstream>
+#include <cctype>
+#include <shared_mutex>
+#include <set>
+#include <algorithm>
+#include <variant>
+#include <bitset>
+#include <optional>
 #include <charconv>
 #include <gsl/gsl>
 
+#pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "Ws2_32.lib")
+
 using namespace std;
+
+#include <plog/Log.h>
 
 #include "../../../include/common.h"
 #include "../../../include/ndisapi.h"
@@ -44,8 +56,10 @@ using namespace std;
 #include "../common/net/mac_address.h"
 #include "../common/winsys/object.h"
 #include "../common/winsys/event.h"
-#include "../common/pcap/pcap.h"
-#include "../common/pcap/pcap_file_storage.h"
+
+#include "../common/net/ip_endpoint.h"
+#include "../common/iphelper/process_lookup.h"
+
 #include "NetworkAdapter.h"
 #include "EthernetBridge.h"
 
