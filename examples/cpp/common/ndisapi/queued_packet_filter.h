@@ -172,6 +172,8 @@ namespace ndisapi
 		// ********************************************************************************
 		std::vector<std::string> get_interface_names_list() const;
 
+		void insert_packet(const INTERMEDIATE_BUFFER& packet_data) const;
+
 		// ********************************************************************************
 		/// <summary>
 		/// Queries the list of the available network interfaces
@@ -263,6 +265,8 @@ namespace ndisapi
 		/// <summary>filtered adapter index</summary>
 		size_t adapter_{0};
 
+		std::unique_ptr<packet_block<1>> m_packet_block_ptr_;
+
 		std::queue<std::unique_ptr<packet_block<maximum_packet_block>>> packet_read_queue_;
 		std::queue<std::unique_ptr<packet_block<maximum_packet_block>>> packet_process_queue_;
 		std::queue<std::unique_ptr<packet_block<maximum_packet_block>>> packet_write_mstcp_queue_;
@@ -283,6 +287,8 @@ namespace ndisapi
 	{
 		try
 		{
+			m_packet_block_ptr_ = std::make_unique<packet_block<1>>(network_interfaces_[adapter_]->get_adapter());
+
 			for (uint32_t i = 0; i < maximum_block_num; ++i)
 			{
 				auto packet_block_ptr = std::make_unique<packet_block<maximum_packet_block>>(
@@ -432,7 +438,7 @@ namespace ndisapi
 		for (size_t i = 0; i < ad_list.m_nAdapterCount; ++i)
 		{
 			ConvertWindows2000AdapterName(reinterpret_cast<const char*>(ad_list.m_szAdapterNameList[i]),
-			                              friendly_name.data(), static_cast<DWORD>(friendly_name.size()));
+			                              friendly_name.data(), friendly_name.size());
 
 			network_interfaces_.push_back(
 				std::make_unique<network_adapter>(
@@ -444,6 +450,19 @@ namespace ndisapi
 					ad_list.m_nAdapterMediumList[i],
 					ad_list.m_usMTU[i]));
 		}
+	}
+
+	inline void queued_packet_filter::insert_packet(const INTERMEDIATE_BUFFER& packet_data) const
+	{
+		(*m_packet_block_ptr_)[0] = packet_data;
+
+		auto* write_mstcp_request = m_packet_block_ptr_->get_write_mstcp_request();
+
+		write_mstcp_request->EthPacket[write_mstcp_request->dwPacketsNumber].Buffer = &(*m_packet_block_ptr_)[0];
+		++write_mstcp_request->dwPacketsNumber;
+
+		SendPacketsToMstcp(write_mstcp_request);
+		write_mstcp_request->dwPacketsNumber = 0;
 	}
 
 	inline void queued_packet_filter::packet_read_thread()
@@ -494,6 +513,8 @@ namespace ndisapi
 
 	inline void queued_packet_filter::packet_process_thread()
 	{
+		wpp::thread::current::set_priority(wpp::thread::thread_priority_t::thread_priority_above_normal);
+
 		while (filter_state_ == filter_state::running)
 		{
 			std::unique_lock lock(packet_process_queue_lock_);
@@ -532,33 +553,33 @@ namespace ndisapi
 				}
 
 				// Place packet back into the flow if was allowed to
-				if (packet_action == packet_action::pass)
+				if (packet_action == packet_action::pass) [[likely]]
 				{
 					if ((*packet_block_ptr)[i].m_dwDeviceFlags == PACKET_FLAG_ON_SEND)
 					{
-						write_adapter_request->EthPacket[write_adapter_request->dwPacketsNumber].Buffer = &
-							(*packet_block_ptr)[i];
+						write_adapter_request->EthPacket[write_adapter_request->dwPacketsNumber].Buffer = &(*
+							packet_block_ptr)[i];
 						++write_adapter_request->dwPacketsNumber;
 					}
 					else
 					{
-						write_mstcp_request->EthPacket[write_mstcp_request->dwPacketsNumber].Buffer = &
-							(*packet_block_ptr)[i];
+						write_mstcp_request->EthPacket[write_mstcp_request->dwPacketsNumber].Buffer = &(*
+							packet_block_ptr)[i];
 						++write_mstcp_request->dwPacketsNumber;
 					}
 				}
-				else if (packet_action == packet_action::revert)
+				else if (packet_action == packet_action::revert) [[unlikely]]
 				{
 					if ((*packet_block_ptr)[i].m_dwDeviceFlags == PACKET_FLAG_ON_RECEIVE)
 					{
-						write_adapter_request->EthPacket[write_adapter_request->dwPacketsNumber].Buffer = &
-							(*packet_block_ptr)[i];
+						write_adapter_request->EthPacket[write_adapter_request->dwPacketsNumber].Buffer = &(*
+							packet_block_ptr)[i];
 						++write_adapter_request->dwPacketsNumber;
 					}
 					else
 					{
-						write_mstcp_request->EthPacket[write_mstcp_request->dwPacketsNumber].Buffer = &
-							(*packet_block_ptr)[i];
+						write_mstcp_request->EthPacket[write_mstcp_request->dwPacketsNumber].Buffer = &(*
+							packet_block_ptr)[i];
 						++write_mstcp_request->dwPacketsNumber;
 					}
 				}
