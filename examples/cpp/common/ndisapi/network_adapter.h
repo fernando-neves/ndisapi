@@ -279,6 +279,18 @@ namespace ndisapi
 		/// </summary>
 		/// <returns>status of the operation</returns>
 		// ********************************************************************************
+		[[maybe_unused]] bool set_packet_event(void* packet_event) const
+		{
+			return api_->SetPacketEvent(current_mode_.hAdapterHandle, static_cast<HANDLE>(packet_event))
+				? true
+				: false;
+		}
+		// ********************************************************************************
+		/// <summary>
+		/// submits packet event into the driver
+		/// </summary>
+		/// <returns>status of the operation</returns>
+		// ********************************************************************************
 		[[maybe_unused]] bool set_packet_event() const
 		{
 			return api_->SetPacketEvent(current_mode_.hAdapterHandle, static_cast<HANDLE>(packet_event_))
